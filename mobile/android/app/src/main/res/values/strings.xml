@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Be PRO</string>
+    <string name="health_rationale">Be PRO reads your sleep sessions and step counts from Health Connect to build your daily summary and weekly insights.\n\nThe data is sent only to your own Be PRO server (the address you entered during setup). It is never shared with third parties, sold, or used for advertising.\n\nYou can revoke access at any time in Health Connect.</string>
+</resources>

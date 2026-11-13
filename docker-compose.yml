@@ -1,0 +1,36 @@
+# Local development: Postgres + the backend.
+#   cp .env.example .env   # then fill in the secrets
+#   docker compose up -d
+#   adb reverse tcp:8080 tcp:8080   # phone over USB reaches http://localhost:8080
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: bepro
+      POSTGRES_USER: bepro
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-bepro}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bepro -d bepro"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/bepro
+      DB_USER: bepro
+      DB_PASSWORD: ${DB_PASSWORD:-bepro}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

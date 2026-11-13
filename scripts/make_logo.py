@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Generates the Be PRO logo: SVGs, Android adaptive icon (vector) and legacy launcher PNGs.
+
+Mark: a ring with a gap (your day, your data), an orange dot in the gap (the one signal that
+matters) and a centre dot (you). Run from anywhere; needs ImageMagick (`magick`) for PNGs.
+"""
+import math, os, subprocess
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RES = os.path.join(ROOT, "mobile/android/app/src/main/res")
+OUT = os.path.join(ROOT, "assets/logo")
+
+C1, C2 = "#6C62DA", "#3B3290"       # gradient, lighter top-left to deeper bottom-right
+ORANGE, WHITE = "#F07A45", "#FFFFFF"
+CX = CY = 54.0                       # 108-unit canvas (adaptive icon size in dp)
+R, STROKE = 21.0, 7.5
+GAP_CENTER, GAP = -55.0, 64.0        # degrees, screen coords (y down)
+DOT_R, CORE_R = 5.6, 6.2
+
+
+def pt(deg, r=R):
+    a = math.radians(deg)
+    return CX + r * math.cos(a), CY + r * math.sin(a)
+
+
+start = GAP_CENTER + GAP / 2
+end = GAP_CENTER - GAP / 2 + 360
+(sx, sy), (ex, ey) = pt(start), pt(end)
+ARC = f"M{sx:.3f},{sy:.3f} A{R},{R} 0 1,1 {ex:.3f},{ey:.3f}"
+dx, dy = pt(GAP_CENTER)
+
+
+def mark_svg(size, background=True, rounded=24.0, scale=1.0, wordmark=False):
+    """scale enlarges the mark relative to the 108 canvas (legacy icons have no safe-zone crop)."""
+    g = f'<g transform="translate({CX},{CY}) scale({scale}) translate({-CX},{-CY})">'
+    bg = ""
+    if background:
+        bg = (f'<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+              f'<stop offset="0" stop-color="{C1}"/><stop offset="1" stop-color="{C2}"/></linearGradient></defs>'
+              f'<rect width="108" height="108" rx="{rounded}" fill="url(#g)"/>')
+    body = (f'{g}<path d="{ARC}" fill="none" stroke="{WHITE}" stroke-width="{STROKE}" stroke-linecap="round"/>'
+            f'<circle cx="{dx:.3f}" cy="{dy:.3f}" r="{DOT_R}" fill="{ORANGE}"/>'
+            f'<circle cx="{CX}" cy="{CY}" r="{CORE_R}" fill="{WHITE}"/></g>')
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 108 108">'
+            f'{bg}{body}</svg>')
+
+
+def wordmark_svg():
+    icon = mark_svg(108, scale=1.35)[len('<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">'):-6]
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="420" height="108" viewBox="0 0 420 108">'
+            f'<g>{icon}</g>'
+            '<text x="128" y="71" font-family="Inter, Roboto, Helvetica, Arial, sans-serif" font-size="46" '
+            'font-weight="700" fill="#1C1B22" letter-spacing="-1">Be <tspan fill="#534AB7">PRO</tspan></text></svg>')
+
+
+def write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(text)
+
+
+def png(svg_path, out, size, circle=False):
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    cmd = ["magick", "-background", "none", "-density", "1200", svg_path, "-resize", f"{size}x{size}"]
+    if circle:
+        cmd += ["(", "+clone", "-alpha", "transparent", "-fill", "white", "-draw",
+                f"circle {size/2-0.5},{size/2-0.5} {size/2-0.5},0.5", ")", "-compose", "DstIn", "-composite"]
+    subprocess.run(cmd + [out], check=True)
+
+
+# --- SVG sources
+write(f"{OUT}/bepro-icon.svg", mark_svg(512, scale=1.35))
+write(f"{OUT}/bepro-icon-round.svg", mark_svg(512, rounded=54, scale=1.35))
+write(f"{OUT}/bepro-mark.svg", mark_svg(512, background=False, scale=1.35).replace(WHITE, "#534AB7", 2))
+write(f"{OUT}/bepro-wordmark.svg", wordmark_svg())
+png(f"{OUT}/bepro-icon.svg", f"{OUT}/bepro-icon-512.png", 512)
+
+# --- legacy launcher icons (pre-Android 8 launchers, and some MIUI themes)
+for folder, px in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
+    png(f"{OUT}/bepro-icon.svg", f"{RES}/mipmap-{folder}/ic_launcher.png", px)
+    png(f"{OUT}/bepro-icon-round.svg", f"{RES}/mipmap-{folder}/ic_launcher_round.png", px, circle=True)
+
+# --- adaptive icon (Android 8+, including the Redmi Y2 on Android 9)
+write(f"{RES}/drawable/ic_launcher_background.xml", f'''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0"
+                android:endX="108" android:endY="108"
+                android:startColor="{C1}" android:endColor="{C2}" />
+        </aapt:attr>
+    </path>
+</vector>
+''')
+
+def circle_path(cx, cy, r):
+    return f"M{cx - r:.3f},{cy:.3f} a{r},{r} 0 1,0 {2*r:.3f},0 a{r},{r} 0 1,0 {-2*r:.3f},0"
+
+write(f"{RES}/drawable/ic_launcher_foreground.xml", f'''<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by scripts/make_logo.py -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="{ARC}" android:strokeColor="{WHITE}"
+        android:strokeWidth="{STROKE}" android:strokeLineCap="round" />
+    <path android:pathData="{circle_path(dx, dy, DOT_R)}" android:fillColor="{ORANGE}" />
+    <path android:pathData="{circle_path(CX, CY, CORE_R)}" android:fillColor="{WHITE}" />
+</vector>
+''')
+adaptive = '''<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+'''
+write(f"{RES}/mipmap-anydpi-v26/ic_launcher.xml", adaptive)
+write(f"{RES}/mipmap-anydpi-v26/ic_launcher_round.xml", adaptive)
+
+# React Native component geometry (printed for src/components/Logo.tsx)
+print(f"ARC={ARC}\nDOT=({dx:.3f},{dy:.3f})")

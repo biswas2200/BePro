@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: bepro-backend
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bepro}
+    username: ${DB_USER:bepro}
+    password: ${DB_PASSWORD:bepro}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+bepro:
+  # Single-user for now: every device that pairs with the shared secret maps to this user.
+  user-id: ${BEPRO_USER_ID:me}
+  # Day boundaries for aggregates are computed in this zone.
+  zone: ${BEPRO_ZONE:Asia/Kolkata}
+  auth:
+    # Typed once into the app's setup screen. Never commit a real value.
+    device-secret: ${BEPRO_DEVICE_SECRET:}
+    # HMAC key for JWTs, at least 32 bytes.
+    jwt-secret: ${BEPRO_JWT_SECRET:}
+    token-ttl: 30d
+  digest:
+    # Turn on when the server is always running (local/VM). On Cloud Run use Cloud Scheduler
+    # to call POST /v1/internal/digest/run with the X-Bepro-Internal-Token header instead.
+    scheduler-enabled: ${BEPRO_DIGEST_SCHEDULER:false}
+    cron: "0 0 8 * * SUN"
+    internal-token: ${BEPRO_INTERNAL_TOKEN:}
+    min-complete-days: 5
+  ai:
+    # "vertex" calls Gemini on Vertex AI; "rules" is an offline heuristic generator for local dev.
+    provider: ${BEPRO_AI_PROVIDER:rules}
+    vertex:
+      project: ${GOOGLE_CLOUD_PROJECT:}
+      location: ${BEPRO_VERTEX_LOCATION:global}
+      model: ${BEPRO_VERTEX_MODEL:gemini-3.5-flash}
+      temperature: 0.2
